@@ -9,6 +9,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![XGBoost](https://img.shields.io/badge/XGBoost-2.x-EB5424?style=for-the-badge)](https://xgboost.readthedocs.io/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](./LICENSE)
 
 ---
 
@@ -26,18 +27,35 @@ Developed at **Afeka College of Engineering** (Department of Software Engineerin
 
 ## 🏗️ Architecture & Subsystems
 
-```
-                               ┌──────────────────────────┐
-                               │  Spot&Slot Mobile & Web  │
-                               │   (React + Vite + PWA)   │
-                               └─────────────┬────────────┘
-                                             │ REST (v1.4)
-                                             ▼
-┌───────────────────────┐      ┌──────────────────────────┐      ┌───────────────────────┐
-│  Predictive ML Micro  │◄────►│   Spring Boot 4.1 API    │◄────►│ PostgreSQL Database   │
-│ (Flask + XGBoost P10- │ HTTP │ (Business Logic, Auth,   │ JDBC │  (Spring Data JPA /   │
-│     P50-P90 Bundle)   │      │   AccessGuard, RBAC)     │      │   Docker Persistence) │
-└───────────────────────┘      └──────────────────────────┘      └───────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Clients["Web & Mobile Clients (React 18 · Vite · TypeScript)"]
+        Mobile["Spot&Slot Mobile<br/>(Driver App · Android Capacitor)"]
+        Console["Spot&Slot Console<br/>(Staff & Admin Desktop Web)"]
+    end
+
+    subgraph Backend["Backend Subsystem (Spring Boot 4.1 · JDK 25)"]
+        Controllers["REST Controllers<br/>(API v1.4)"]
+        Logic["Business Logic & AccessGuard<br/>(RBAC: ADMIN / OPERATOR / END_USER)"]
+        Persistence["Spring Data JPA Persistence<br/>(Entities & Repositories)"]
+        HealthScheduler["Slot Health Scheduler<br/>(Heartbeat Scanner)"]
+    end
+
+    subgraph MLService["Predictive Microservice (Python · Flask)"]
+        Model["XGBoost Quantile Model Bundle<br/>(P10 / P50 / P90 Uncertainty Bands)"]
+    end
+
+    subgraph Storage["Database Infrastructure"]
+        Postgres[("PostgreSQL 16<br/>(Docker Compose / Persistent Volume)")]
+    end
+
+    Mobile -->|HTTP REST /ambient-invisible-intelligence| Controllers
+    Console -->|HTTP REST /ambient-invisible-intelligence| Controllers
+    Controllers --> Logic
+    Logic --> Persistence
+    Logic -->|HTTP POST /predict & /forecast| MLService
+    Persistence -->|Spring Data JPA / JDBC| Postgres
+    HealthScheduler -->|Every 30s: mark stale slots FAULTY| Persistence
 ```
 
 The system is organized as a unified monorepo containing three core micro-components:
@@ -142,9 +160,11 @@ npm run dev:admin
 
 ---
 
-## 👥 The Penguins Team
+## 👥 The Penguins Team & Project Roles
 
-Afeka College of Engineering — Ambient Invisible Intelligence (Spring 2026):
+**Afeka College of Engineering** — Ambient Invisible Intelligence (Spring 2026)
+
+### Core Team Roster
 - **Omer Asayag** — Team Lead & Scrum Master
 - **Avishay Haimov** — Product Owner
 - **Tom Gurevich** — QA Engineer & Configuration Manager
@@ -152,7 +172,14 @@ Afeka College of Engineering — Ambient Invisible Intelligence (Spring 2026):
 - **Shawn Farberov** — System Architect
 - **Nicole Barghout** — DBA & DevOps
 
+### 🌟 Key Individual Contributions — Omer Asayag
+Beyond serving as **Team Lead & Scrum Master**, Omer played an active hands-on technical role across every stage of the system lifecycle:
+- **Project Orchestration & Code Quality**: Orchestrated the overall cross-repository architecture, defined cross-service API contracts, coordinated agile sprints across sub-teams, and conducted thorough code reviews across all backend, client, and ML modules.
+- **Machine Learning & Algorithmic Research**: Led the research, prototyping, and production deployment of the parking availability predictor. Evaluated multiple candidate algorithms (Linear Regression, Decision Trees, Random Forests, Gradient Boosting vs. XGBoost), trained and tuned the final **XGBoost quantile bundle (P10/P50/P90)** ($R^2 = 0.948$), and designed the capacity-independent scaling mechanism that enables a single model to serve arbitrary parking lots.
+- **Data Engineering**: Collaborated closely with **Tom Gurevich** on synthetic data modeling and feature engineering pipelines (`mockdatagen.py`), synthesizing 43,800+ hourly data points across North Tel Aviv lots while integrating Israeli public holidays, Shabbat transitions, academic terms, and major regional events.
+- **UI/UX Research & Product Strategy**: Actively partnered with **Avishay Haimov** and **Stephanie Kovaks** in conducting user research and field interviews across North Tel Aviv, formulating user personas (Noa, Rami, Tomer), and translating user pain points into iterative UI/UX enhancements (including Hebrew RTL layout, calming visual palettes, and uncertainty band forecast charts).
+
 ---
 
-## 📄 License & Academic Integrity
-This repository is submitted as the Final Capstone Project for the Ambient Invisible Intelligence course at Afeka College of Engineering.
+## 📄 License
+This project is licensed under the MIT License — see the [LICENSE](./LICENSE) file for details.
