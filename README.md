@@ -16,11 +16,11 @@
 
 ## 📌 Project Overview
 
-> 🏆 **Achievement**: Graded **100/100** — Ranked the **#1 Project** in the *Ambient Invisible Intelligence* course at Afeka College of Engineering (Spring 2026).
+> 🏆 **Achievement**: Graded **100/100** — Ranked the **#1 Project** in the *Integrative Software Engineering* course (Subject: Ambient Invisible Intelligence) at Afeka College of Engineering (Spring 2026).
 
 **Spot&Slot** is an end-to-end Smart Parking Management System designed around Gartner's **Ambient Invisible Intelligence (AII)** model. The system embeds real-time awareness and predictive machine learning seamlessly into urban parking infrastructure: drivers simply open the app to view live availability and accurate occupancy forecasts, without needing to know the complex sensing and modeling happening behind the scenes.
 
-Developed at **Afeka College of Engineering** (Department of Software Engineering, Ambient Invisible Intelligence — Spring 2026), the platform addresses chronic urban parking congestion in dense metropolitan areas like North Tel Aviv by providing:
+Developed at **Afeka College of Engineering** (Department of Software Engineering, Integrative Software Engineering — Subject: Ambient Invisible Intelligence, Spring 2026), the platform addresses chronic urban parking congestion in dense metropolitan areas like North Tel Aviv by providing:
 - Real-time availability tracking across parking lots, sections, and individual slots.
 - Machine Learning future-occupancy predictions with confidence intervals.
 - Role-based management for drivers, lot operators, and system administrators.
@@ -193,7 +193,7 @@ npm run dev:admin
 
 ## 👥 The Penguins Team & Project Roles
 
-**Afeka College of Engineering** — Ambient Invisible Intelligence (Spring 2026)
+**Afeka College of Engineering** — Integrative Software Engineering: Ambient Invisible Intelligence (Spring 2026)
 
 ### Core Team Roster
 - **Omer Asayag** — Team Lead & Scrum Master
