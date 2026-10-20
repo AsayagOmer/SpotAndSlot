@@ -69,6 +69,34 @@ The system is organized as a unified monorepo containing three core micro-compon
 
 ---
 
+## 🏛️ Architectural Principles & Patterns
+
+The architecture of **Spot&Slot** is grounded in established software engineering and distributed system principles:
+
+1. **Ambient Invisible Intelligence (AII) (Gartner Model)**:
+   Intelligence is seamlessly embedded into everyday infrastructure. Drivers receive accurate live availability and forecasts with minimal interaction, while complex sensing, telemetry ingestion, and ML inference run invisibly in the background.
+
+2. **Boundary-Control-Entity (BCE) & Layered Separation**:
+   Strict separation between external contracts and database schemas:
+   - **Boundaries (DTOs)**: `UserBoundary`, `ObjectBoundary`, and `CommandBoundary` define the versioned REST contract (API v1.4).
+   - **AccessGuard & RBAC**: Centralized security layer verifying caller credentials and role permissions (`ADMIN`, `OPERATOR`, `END_USER`) before any request hits domain logic.
+   - **Control (Business Logic)**: Modular services (`ObjectsService`, `CommandsService`, `UsersService`) encapsulate business invariants, section availability grouping, and cascading lifecycle operations.
+   - **Entities & Persistence**: Spring Data JPA repositories persist state to PostgreSQL via clean relational abstractions.
+
+3. **Generic Metamodel & Command Pattern**:
+   Instead of static tables for every domain object, physical entities (`PARKING_LOT`, `PARKING_SECTION`, `PARKING_SLOT`, `VEHICLE`) share an extensible metamodel with typed JSON attribute maps and hierarchical parent/child links. Domain operations are modeled as first-class executable commands dispatched, validated, and logged through `CommandBoundary`.
+
+4. **Decoupled Polyglot Microservices**:
+   Core transactional business logic (Java 25 / Spring Boot 4.1) is decoupled from statistical machine learning modeling (Python / Flask + XGBoost) and front-end clients (React 18 / Vite / Capacitor), communicating via versioned HTTP REST contracts for independent maintainability and scalability.
+
+5. **Fail-Soft Graceful Degradation (Resilience)**:
+   In the event the machine-learning microservice is unreachable, the API gracefully falls back to real-time heuristic slot availability calculations with an informational note, ensuring uninterrupted driver operations (NFR-2).
+
+6. **Time-Triggered Autonomous Scheduling (Heartbeat Pattern)**:
+   An autonomous scheduled background worker (`SlotHealthScheduler`) runs every 30 seconds (`<<Time>>` actor) to inspect slot heartbeats, automatically transitioning stale or disconnected sensors to `FAULTY` status without manual intervention.
+
+---
+
 ## ✨ Key Capabilities
 
 1. **Driver Experience (END_USER)**
@@ -177,7 +205,7 @@ Beyond serving as **Team Lead & Scrum Master**, Omer played an active hands-on t
 - **Project Orchestration & Code Quality**: Orchestrated the overall cross-repository architecture, defined cross-service API contracts, coordinated agile sprints across sub-teams, and conducted thorough code reviews across all backend, client, and ML modules.
 - **Machine Learning & Algorithmic Research**: Led the research, prototyping, and production deployment of the parking availability predictor. Evaluated multiple candidate algorithms (Linear Regression, Decision Trees, Random Forests, Gradient Boosting vs. XGBoost), trained and tuned the final **XGBoost quantile bundle (P10/P50/P90)** ($R^2 = 0.948$), and designed the capacity-independent scaling mechanism that enables a single model to serve arbitrary parking lots.
 - **Data Engineering**: Collaborated closely with **Tom Gurevich** on synthetic data modeling and feature engineering pipelines (`mockdatagen.py`), synthesizing 43,800+ hourly data points across North Tel Aviv lots while integrating Israeli public holidays, Shabbat transitions, academic terms, and major regional events.
-- **UI/UX Research & Product Strategy**: Actively partnered with **Avishay Haimov** and **Stephanie Kovaks** in conducting user research and field interviews across North Tel Aviv, formulating user personas (Noa, Rami, Tomer), and translating user pain points into iterative UI/UX enhancements (including Hebrew RTL layout, calming visual palettes, and uncertainty band forecast charts).
+- **UI/UX Research, Product Strategy & Alpha Testing**: Actively partnered with **Avishay Haimov** and **Stephanie Kovaks** in conducting extensive user research and field interviews across North Tel Aviv, formulating user personas (Noa, Rami, Tomer). Together with **Avishay Haimov**, conducted hands-on alpha testing with local drivers and residents, translating user friction into critical design improvements (Hebrew RTL adaptation, transitioning alarming reds to calm visual palettes, and adding uncertainty-band forecast visualizations).
 
 ---
 
