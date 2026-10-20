@@ -9,11 +9,14 @@
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![XGBoost](https://img.shields.io/badge/XGBoost-2.x-EB5424?style=for-the-badge)](https://xgboost.readthedocs.io/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
+[![Grade: 100/100](https://img.shields.io/badge/Grade-100%2F100_(Rank_%231)-brightgreen?style=for-the-badge&logo=target)](https://github.com/AsayagOmer/SpotAndSlot)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](./LICENSE)
 
 ---
 
 ## 📌 Project Overview
+
+> 🏆 **Achievement**: Graded **100/100** — Ranked the **#1 Project** in the *Ambient Invisible Intelligence* course at Afeka College of Engineering (Spring 2026).
 
 **Spot&Slot** is an end-to-end Smart Parking Management System designed around Gartner's **Ambient Invisible Intelligence (AII)** model. The system embeds real-time awareness and predictive machine learning seamlessly into urban parking infrastructure: drivers simply open the app to view live availability and accurate occupancy forecasts, without needing to know the complex sensing and modeling happening behind the scenes.
 
@@ -209,5 +212,9 @@ Beyond serving as **Team Lead & Scrum Master**, Omer played an active hands-on t
 
 ---
 
-## 📄 License
+## 📄 License & Academic Integrity
+
+> [!NOTE]
+> **Repository & Institutional Policy Notice**: In accordance with Afeka College of Engineering's institutional policy, the original internal Bitbucket repositories and classroom version control servers cannot be shared publicly. This repository serves as the official, unified open-source release of the complete project files, documentation, and research artifacts.
+
 This project is licensed under the MIT License — see the [LICENSE](./LICENSE) file for details.
