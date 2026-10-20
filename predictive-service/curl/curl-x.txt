@@ -1,0 +1,6 @@
+REM Invoke a command on the Smart Parking API (replace <LOT_ID> in payload.json with a real lot objectId).
+curl.exe -X POST http://localhost:8084/ambient-invisible-intelligence/commands -H "API-Version: 1.3" -H "Content-Type: application/json" -d "@payload.json"
+
+REM Call the ML prediction service directly:
+curl.exe -X POST http://localhost:5000/predict -H "Content-Type: application/json" -d "{\"targetTimestamp\":\"2026-06-03T12:00:00Z\",\"currentFreeSlots\":13,\"totalSlots\":33}"
+curl.exe -X POST http://localhost:5000/forecast -H "Content-Type: application/json" -d "{\"date\":\"2026-06-03\",\"totalSlots\":33}"

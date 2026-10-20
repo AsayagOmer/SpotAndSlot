@@ -1,0 +1,57 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '4.1.0'
+	id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'il.ac.afeka.integrative'
+version = '1.4' //API version of sprint 4
+description = 'Smart Parking (The moovit of parking)'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(25)
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-webmvc' // API builder tool.
+	implementation 'org.springframework.boot:spring-boot-starter-restclient' // For running REST client (we're working with RESTful service).
+
+	// Source: https://mvnrepository.com/artifact/org.springdoc/springdoc-openapi-starter-webmvc-ui
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
+
+	// JPA / relational
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-h2console'
+
+	developmentOnly 'org.springframework.boot:spring-boot-devtools'
+	developmentOnly 'org.springframework.boot:spring-boot-docker-compose'
+
+	runtimeOnly 'com.h2database:h2'          // tests / generic JDBC console
+	runtimeOnly 'org.postgresql:postgresql'  // dev + prod
+
+	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-restclient-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+	testImplementation 'org.testcontainers:testcontainers-postgresql'
+	testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher' // JUnit - unit testing
+
+	// Cucumber / Gherkin BDD (scenarios in src/test/resources/features,
+	// glue code in ambient_invisible_intelligence.bdd, runner RunCucumberTest)
+	testImplementation platform('io.cucumber:cucumber-bom:7.23.0')
+	testImplementation 'io.cucumber:cucumber-java'
+	testImplementation 'io.cucumber:cucumber-spring'
+	testImplementation 'io.cucumber:cucumber-junit-platform-engine'
+	testImplementation 'org.junit.platform:junit-platform-suite'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}

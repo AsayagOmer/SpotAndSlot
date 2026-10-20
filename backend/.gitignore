@@ -1,0 +1,51 @@
+# 1. IGNORE EVERYTHING IN THE ROOT BY DEFAULT
+/*
+
+# Java / Eclipse / Gradle specific exclusions
+.gradle/
+bin/
+.settings/
+.classpath
+.project
+
+# 2. ALLOWLIST: UN-IGNORE SPECIFIC FILES AND FOLDERS
+![Rr][Ee][Aa][Dd][Mm][Ee]*
+!/src/
+!build.gradle
+!compose.yaml
+!gradlew
+!gradlew.bat
+!/gradle/
+!/gradle/wrapper/
+!/gradle/wrapper/**
+!/INTEGRATION.md
+!/LIVE-VERIFICATION.md
+!/perf/
+
+# (Optional but recommended) Un-ignore the .gitignore itself so it is tracked
+!.gitignore
+
+# 3. EXCLUSIONS: BUILD ARTIFACTS / OS / IDE FILES
+
+# Gradle / Java build output
+build/
+
+# JMeter: keep the plan + README, but not the generated run output
+/perf/results/
+
+# Logs and databases
+*.log
+*.sqlite3
+
+# OS / IDE specific
+.DS_Store
+.idea/
+.vscode/
+__MACOSX/
+
+# Project documents stay local
+/docs/
+test_spec/
+
+# Word/Office temporary lock files
+~$*

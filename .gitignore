@@ -1,0 +1,45 @@
+# Environment variables
+.env
+.env*.local
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+
+# Java & Gradle
+.gradle/
+build/
+bin/
+*.class
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints/
+.pytest_cache/
+.venv/
+env/
+venv/
+
+# Android / Mobile build outputs
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/.idea/
+android/app/release/
+
+# OS and IDE files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+~$*
+*.log

@@ -1,0 +1,87 @@
+{
+  "dataset": {
+    "rows": 43800,
+    "lots": 5,
+    "period": "2024-09-01 .. 2025-08-31",
+    "capacities": [
+      120,
+      180,
+      300,
+      420,
+      600
+    ]
+  },
+  "best_model": "XGBoost",
+  "metrics": {
+    "XGBoost": {
+      "MAE": 23.56,
+      "RMSE": 38.1,
+      "R2": 0.948,
+      "MAE_pct_capacity": 7.27,
+      "CV_MAE": 15.17
+    },
+    "HistGradientBoosting": {
+      "MAE": 23.63,
+      "RMSE": 40.41,
+      "R2": 0.941,
+      "MAE_pct_capacity": 7.29,
+      "CV_MAE": 16.45
+    },
+    "Random Forest": {
+      "MAE": 24.63,
+      "RMSE": 43.09,
+      "R2": 0.933,
+      "MAE_pct_capacity": 7.6,
+      "CV_MAE": 15.58
+    },
+    "Decision Tree": {
+      "MAE": 25.83,
+      "RMSE": 44.97,
+      "R2": 0.927,
+      "MAE_pct_capacity": 7.97,
+      "CV_MAE": 17.19
+    },
+    "Gradient Boosting": {
+      "MAE": 37.57,
+      "RMSE": 56.91,
+      "R2": 0.883,
+      "MAE_pct_capacity": 11.6,
+      "CV_MAE": 36.57
+    },
+    "Linear Regression": {
+      "MAE": 66.85,
+      "RMSE": 86.75,
+      "R2": 0.729,
+      "MAE_pct_capacity": 20.63,
+      "CV_MAE": 70.19
+    }
+  },
+  "best_metrics": {
+    "MAE": 23.56,
+    "RMSE": 38.1,
+    "R2": 0.948,
+    "MAE_pct_capacity": 7.27
+  },
+  "top_features": [
+    "lot_type_residential",
+    "lot_type_mall",
+    "total_slots",
+    "lot_type_university",
+    "lot_type_park",
+    "lot_type_leisure",
+    "is_weekend",
+    "academic_term_break"
+  ],
+  "tuning": {
+    "applied": true,
+    "best_params": {
+      "subsample": 0.8,
+      "n_estimators": 300,
+      "max_depth": 8,
+      "learning_rate": 0.05
+    },
+    "MAE": 23.640281677246094,
+    "RMSE": 38.57362519321816,
+    "R2": 0.9463484883308411
+  }
+}
