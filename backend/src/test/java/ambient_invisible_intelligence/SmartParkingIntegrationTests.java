@@ -1230,5 +1230,44 @@ class SmartParkingIntegrationTests {
 			invokeCommandResult("vehicleEnters", slotA1Id, Map.of("lotId", lotId))
 					.andExpect(status().isBadRequest());
 		}
+
+		@Test
+		@DisplayName("POST /users creating ADMIN with wrong actingPassword returns 401")
+		void createAdminWithWrongActingPasswordRejected() throws Exception {
+			String body = """
+					{
+						"email": "admin2@test.org",
+						"password": "Admin@2",
+						"role": "ADMIN",
+						"username": "Admin 2",
+						"avatar": ":)"
+					}
+					""";
+			mvc.perform(post(BASE + "/users")
+							.param("actingEmail", "admin@test.org")
+							.param("actingPassword", "WrongPass@1")
+							.header("API-Version", "1.4")
+							.contentType(MediaType.APPLICATION_JSON)
+							.content(body))
+					.andExpect(status().isUnauthorized());
+		}
+
+		@Test
+		@DisplayName("predictAvailability excludes inactive slots from fallback count")
+		void predictAvailabilityExcludesInactiveSlots() throws Exception {
+			ObjectBoundary deactivate = new ObjectBoundary();
+			deactivate.setActive(false);
+			mvc.perform(put(BASE + "/objects/{sys}/{id}", sys, slotA1Id)
+							.param("userSystemID", sys)
+							.param("userEmail", "operator@test.org")
+							.param("userPassword", "Test@2")
+							.header("API-Version", "1.4")
+							.contentType(MediaType.APPLICATION_JSON)
+							.content(mapper.writeValueAsString(deactivate)))
+					.andExpect(status().isOk());
+
+			JsonNode result = invokeCommandJson("predictAvailability", lotId, Map.of()).get(0);
+			assertThat(result.get("predictedFreeSlots").asLong()).isEqualTo(2L);
+		}
 	}
 }

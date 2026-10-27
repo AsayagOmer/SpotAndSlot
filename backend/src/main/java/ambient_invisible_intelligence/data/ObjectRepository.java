@@ -17,7 +17,11 @@ public interface ObjectRepository extends JpaRepository<ObjectEntity, String> {
 
 	List<ObjectEntity> findAllByType(String type);
 
+	List<ObjectEntity> findAllByTypeAndActiveTrue(String type);
+
 	List<ObjectEntity> findAllByTypeAndStatus(String type, String status);
+
+	List<ObjectEntity> findAllByTypeAndStatusAndActiveTrue(String type, String status);
 
 	// ─── Sprint 4 custom queries (all paginated) ───────────────────────────────
 	// Each query has an active-only variant: OPERATORs read everything, while

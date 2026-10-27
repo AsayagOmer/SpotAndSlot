@@ -12,7 +12,9 @@ bin/
 ![Rr][Ee][Aa][Dd][Mm][Ee]*
 !/src/
 !build.gradle
+!settings.gradle
 !compose.yaml
+!Dockerfile
 !gradlew
 !gradlew.bat
 !/gradle/

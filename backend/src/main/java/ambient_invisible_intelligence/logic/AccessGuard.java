@@ -1,6 +1,8 @@
 package ambient_invisible_intelligence.logic;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import ambient_invisible_intelligence.data.ObjectEntity;
@@ -27,12 +29,29 @@ public class AccessGuard {
 	private final UserRepository userRepository;
 	private final ObjectRepository objectRepository;
 	private final String systemID;
+	private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
 	public AccessGuard(UserRepository userRepository, ObjectRepository objectRepository,
 			@Value("${spring.application.name}") String systemID) {
 		this.userRepository = userRepository;
 		this.objectRepository = objectRepository;
 		this.systemID = systemID;
+	}
+
+	/**
+	 * Verify raw password against stored BCrypt hash (with plaintext fallback for legacy rows).
+	 */
+	public boolean matchesPassword(String rawPassword, String storedPassword) {
+		if (rawPassword == null || storedPassword == null)
+			return false;
+		if (storedPassword.startsWith("$2a$") || storedPassword.startsWith("$2b$") || storedPassword.startsWith("$2y$")) {
+			return passwordEncoder.matches(rawPassword, storedPassword);
+		}
+		return storedPassword.equals(rawPassword);
+	}
+
+	public String encodePassword(String rawPassword) {
+		return passwordEncoder.encode(rawPassword);
 	}
 
 	/** Verify identity + password. Throws 401 for missing/unknown/wrong credentials. */
@@ -42,7 +61,7 @@ public class AccessGuard {
 		String sid = (userSystemID == null || userSystemID.isBlank()) ? systemID : userSystemID;
 		UserEntity user = userRepository.findById(UserEntity.key(email, sid))
 				.orElseThrow(() -> new UnauthorizedException("unknown user: " + email));
-		if (!password.equals(user.getPassword()))
+		if (!matchesPassword(password, user.getPassword()))
 			throw new UnauthorizedException("invalid credentials for " + email);
 		return user;
 	}
@@ -75,14 +94,21 @@ public class AccessGuard {
 
 	/**
 	 * Extension: creating ADMIN/OPERATOR accounts requires an existing admin
-	 * (actingEmail param on POST /users; identity-only per the user-API rules).
+	 * (actingEmail param on POST /users; identity-only per the user-API rules,
+	 * or verified against actingPassword when supplied).
 	 */
 	public UserEntity requireAdminByEmail(String email, String userSystemID) {
+		return requireAdminByEmail(email, userSystemID, null);
+	}
+
+	public UserEntity requireAdminByEmail(String email, String userSystemID, String actingPassword) {
 		if (email == null || email.isBlank())
 			throw new UnauthorizedException("acting user email is required");
 		String sid = (userSystemID == null || userSystemID.isBlank()) ? systemID : userSystemID;
 		UserEntity user = userRepository.findById(UserEntity.key(email, sid))
 				.orElseThrow(() -> new UnauthorizedException("unknown user: " + email));
+		if (actingPassword != null && !matchesPassword(actingPassword, user.getPassword()))
+			throw new UnauthorizedException("invalid credentials for acting admin: " + email);
 		return requireRole(user, UserRole.ADMIN);
 	}
 

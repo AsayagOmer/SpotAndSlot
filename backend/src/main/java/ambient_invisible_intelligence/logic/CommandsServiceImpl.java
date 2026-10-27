@@ -8,6 +8,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +21,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 
 import ambient_invisible_intelligence.boundaries.CommandBoundary;
 import ambient_invisible_intelligence.boundaries.CommandId;
@@ -29,6 +33,7 @@ import ambient_invisible_intelligence.boundaries.TargetObject;
 import ambient_invisible_intelligence.boundaries.UserId;
 import ambient_invisible_intelligence.data.CommandEntity;
 import ambient_invisible_intelligence.data.CommandRepository;
+import ambient_invisible_intelligence.data.ObjectEntity;
 import ambient_invisible_intelligence.data.ObjectRepository;
 import ambient_invisible_intelligence.exceptions.GoneException;
 import ambient_invisible_intelligence.exceptions.InvalidInputException;
@@ -40,10 +45,14 @@ import ambient_invisible_intelligence.smartparking.VehicleDetails;
 @Service
 public class CommandsServiceImpl implements CommandsService {
 
+	private static final Logger logger = LoggerFactory.getLogger(CommandsServiceImpl.class);
+
 	private final CommandRepository commandRepository;
 	private final ObjectsService objectsService;
 	private final ObjectRepository objectRepository;
 	private final String systemID;
+	private final String mlServiceBaseUrl;
+	private final RestTemplate restTemplate;
 
 	private static final Map<String, Set<String>> COMMANDS_BY_TYPE = Map.of(
 			ObjectType.PARKING_LOT, Set.of(
@@ -62,14 +71,30 @@ public class CommandsServiceImpl implements CommandsService {
 					"reportSession")
 	);
 
+	@Autowired
 	public CommandsServiceImpl(CommandRepository commandRepository,
 			ObjectsService objectsService,
 			ObjectRepository objectRepository,
-			@Value("${spring.application.name}") String systemID) {
+			@Value("${spring.application.name}") String systemID,
+			@Value("${ML_URL:http://localhost:5000}") String mlServiceBaseUrl) {
 		this.commandRepository = commandRepository;
 		this.objectsService = objectsService;
 		this.objectRepository = objectRepository;
 		this.systemID = systemID;
+		this.mlServiceBaseUrl = mlServiceBaseUrl.endsWith("/")
+				? mlServiceBaseUrl.substring(0, mlServiceBaseUrl.length() - 1)
+				: mlServiceBaseUrl;
+		SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+		requestFactory.setConnectTimeout(2000);
+		requestFactory.setReadTimeout(3000);
+		this.restTemplate = new RestTemplate(requestFactory);
+	}
+
+	public CommandsServiceImpl(CommandRepository commandRepository,
+			ObjectsService objectsService,
+			ObjectRepository objectRepository,
+			String systemID) {
+		this(commandRepository, objectsService, objectRepository, systemID, "http://localhost:5000");
 	}
 
 	@Override
@@ -154,13 +179,12 @@ public class CommandsServiceImpl implements CommandsService {
 
 	private List<Object> availabilityInLot(String lotId, Map<String, Object> attrs) {
 		String slotKindFilter = (String) attrs.get("slotKindFilter");
-		long freeSlots = objectRepository.findAllByTypeAndStatus(ObjectType.PARKING_SLOT, "FREE").stream()
-				.filter(b -> Boolean.TRUE.equals(b.getActive()))
+		long freeSlots = objectRepository.findAllByTypeAndStatusAndActiveTrue(ObjectType.PARKING_SLOT, "FREE").stream()
 				.map(b -> ParkingSlotDetails.from(b.getObjectDetails()))
 				.filter(d -> lotId.equals(d.parentLotId()))
 				.filter(d -> slotKindFilter == null || slotKindFilter.equals(d.slotKind()))
 				.count();
-		long searchers = objectRepository.findAllByTypeAndStatus(ObjectType.VEHICLE, "SEARCHING").stream()
+		long searchers = objectRepository.findAllByTypeAndStatusAndActiveTrue(ObjectType.VEHICLE, "SEARCHING").stream()
 				.map(b -> VehicleDetails.from(b.getObjectDetails()))
 				.filter(d -> lotId.equals(d.lotId()))
 				.count();
@@ -175,8 +199,7 @@ public class CommandsServiceImpl implements CommandsService {
 	private List<Object> bestSectionInLot(String lotId, Map<String, Object> attrs) {
 		String slotKindFilter = (String) attrs.get("slotKindFilter");
 		Map<String, Long> freePerSection = new HashMap<>();
-		objectRepository.findAllByTypeAndStatus(ObjectType.PARKING_SLOT, "FREE").stream()
-				.filter(b -> Boolean.TRUE.equals(b.getActive()))
+		objectRepository.findAllByTypeAndStatusAndActiveTrue(ObjectType.PARKING_SLOT, "FREE").stream()
 				.map(b -> ParkingSlotDetails.from(b.getObjectDetails()))
 				.filter(d -> lotId.equals(d.parentLotId()))
 				.filter(d -> slotKindFilter == null || slotKindFilter.equals(d.slotKind()))
@@ -205,30 +228,30 @@ public class CommandsServiceImpl implements CommandsService {
 	 * @param attrs Contains the "targetTimestamp" (ISO-8601, trust me Eyal) for the prediction.
 	 * @return A list containing the lot ID, target time, predicted slots, and a status note.
 	 */
+	@SuppressWarnings("unchecked")
 	private List<Object> predictAvailability(String lotId, Map<String, Object> attrs) {
 		Object targetTimeObj = attrs.get("targetTimestamp");
 		String targetTimeStr = targetTimeObj != null ? String.valueOf(targetTimeObj) : null;
 
-		// 1. Calculate current free slots and total slots for context
-		long currentFree = objectRepository.findAllByTypeAndStatus(ObjectType.PARKING_SLOT, "FREE").stream()
-				.map(b -> ParkingSlotDetails.from(b.getObjectDetails()))
-				.filter(d -> lotId.equals(d.parentLotId()))
-				.count();
+		// 1. Single-pass active slot count for totalSlots and currentFree
+		List<ObjectEntity> activeSlotsInLot = objectRepository.findAllByTypeAndActiveTrue(ObjectType.PARKING_SLOT).stream()
+				.filter(b -> lotId.equals(ParkingSlotDetails.from(b.getObjectDetails()).parentLotId()))
+				.toList();
 
-		long totalSlots = objectRepository.findAllByType(ObjectType.PARKING_SLOT).stream()
-				.map(b -> ParkingSlotDetails.from(b.getObjectDetails()))
-				.filter(d -> lotId.equals(d.parentLotId()))
+		long totalSlots = activeSlotsInLot.size();
+		long currentFree = activeSlotsInLot.stream()
+				.filter(b -> "FREE".equals(b.getStatus()))
 				.count();
 
 		long predictedFreeSlots = currentFree;
+		Long predictedFreeLower = null;
+		Long predictedFreeUpper = null;
 		String note = "Prediction generated by ML Microservice";
 
 		// 2. Call the Python ML Microservice
 		try {
 			if (targetTimeStr != null) {
-				RestTemplate restTemplate = new RestTemplate();
-				// The URL of the Python Flask server
-				String pythonMlUrl = "http://localhost:5000/predict";
+				String pythonMlUrl = this.mlServiceBaseUrl + "/predict";
 
 				// Prepare the JSON request body
 				Map<String, Object> requestBody = new HashMap<>();
@@ -242,8 +265,8 @@ public class CommandsServiceImpl implements CommandsService {
 				HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
 
 				// Send POST request and receive response
-				//TODO: rechecking why is there a warning?
-				ResponseEntity<Map> response = restTemplate.postForEntity(pythonMlUrl, requestEntity, Map.class);
+				@SuppressWarnings("rawtypes")
+				ResponseEntity<Map> response = this.restTemplate.postForEntity(pythonMlUrl, requestEntity, Map.class);
 				Map<String, Object> mlResponse = response.getBody();
 
 				// 3. Extract the prediction result
@@ -253,6 +276,13 @@ public class CommandsServiceImpl implements CommandsService {
 
 					// Ensure the prediction is within physical boundaries
 					predictedFreeSlots = Math.min(totalSlots, Math.max(0, predictedFreeSlots));
+
+					if (mlResponse.get("predictedFreeLower") instanceof Number lowerNum) {
+						predictedFreeLower = Math.min(totalSlots, Math.max(0, lowerNum.longValue()));
+					}
+					if (mlResponse.get("predictedFreeUpper") instanceof Number upperNum) {
+						predictedFreeUpper = Math.min(totalSlots, Math.max(0, upperNum.longValue()));
+					}
 				} else {
 					note = "ML Service response invalid. Fallback to current free slots.";
 				}
@@ -262,7 +292,7 @@ public class CommandsServiceImpl implements CommandsService {
 		} catch (Exception ex) {
 			// Fallback in case of network error or if the ML service is down
 			note = "ML Service unavailable. Fallback to current free slots. Error: " + ex.getMessage();
-			System.err.println("Prediction service failed: " + ex.getMessage());
+			logger.warn("Prediction service failed for lot {}: {}", lotId, ex.getMessage());
 		}
 
 		// 4. Build and return the response
@@ -270,6 +300,12 @@ public class CommandsServiceImpl implements CommandsService {
 		result.put("lotId", lotId);
 		result.put("targetTimestamp", targetTimeStr);
 		result.put("predictedFreeSlots", predictedFreeSlots);
+		if (predictedFreeLower != null) {
+			result.put("predictedFreeLower", predictedFreeLower);
+		}
+		if (predictedFreeUpper != null) {
+			result.put("predictedFreeUpper", predictedFreeUpper);
+		}
 		result.put("note", note);
 
 		return List.of(result);
@@ -277,7 +313,7 @@ public class CommandsServiceImpl implements CommandsService {
 
 	private List<Object> runHealthCheck(String lotId) {
 		List<Object> faulty = new ArrayList<>();
-		objectRepository.findAllByType(ObjectType.PARKING_SLOT).stream()
+		objectRepository.findAllByTypeAndActiveTrue(ObjectType.PARKING_SLOT).stream()
 				.filter(b -> {
 					ParkingSlotDetails d = ParkingSlotDetails.from(b.getObjectDetails());
 					return lotId.equals(d.parentLotId());
@@ -299,17 +335,16 @@ public class CommandsServiceImpl implements CommandsService {
 
 	private List<Object> availabilityInSection(String sectionId, Map<String, Object> attrs) {
 		String slotKindFilter = (String) attrs.get("slotKindFilter");
-		long freeSlots = objectRepository.findAllByTypeAndStatus(ObjectType.PARKING_SLOT, "FREE").stream()
-				.filter(b -> Boolean.TRUE.equals(b.getActive()))
-				.map(b -> ParkingSlotDetails.from(b.getObjectDetails()))
-				.filter(d -> sectionId.equals(d.parentSectionId()))
-				.filter(d -> slotKindFilter == null || slotKindFilter.equals(d.slotKind()))
-				.count();
-		long totalSlots = objectRepository.findAllByType(ObjectType.PARKING_SLOT).stream()
-				.filter(b -> Boolean.TRUE.equals(b.getActive()))
-				.map(b -> ParkingSlotDetails.from(b.getObjectDetails()))
-				.filter(d -> sectionId.equals(d.parentSectionId()))
-				.filter(d -> slotKindFilter == null || slotKindFilter.equals(d.slotKind()))
+		List<ObjectEntity> sectionSlots = objectRepository.findAllByTypeAndActiveTrue(ObjectType.PARKING_SLOT).stream()
+				.filter(b -> {
+					ParkingSlotDetails d = ParkingSlotDetails.from(b.getObjectDetails());
+					return sectionId.equals(d.parentSectionId())
+							&& (slotKindFilter == null || slotKindFilter.equals(d.slotKind()));
+				})
+				.toList();
+		long totalSlots = sectionSlots.size();
+		long freeSlots = sectionSlots.stream()
+				.filter(b -> "FREE".equals(b.getStatus()))
 				.count();
 		Map<String, Object> result = new HashMap<>();
 		result.put("sectionId", sectionId);

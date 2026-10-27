@@ -38,12 +38,13 @@ public class UserController {
 	public UserBoundary createUser(
 			@RequestBody UserWithPasswordBoundary input,
 			@RequestParam(value = "actingEmail", required = false) String actingEmail,
-			@RequestParam(value = "actingSystemID", required = false) String actingSystemID) {
+			@RequestParam(value = "actingSystemID", required = false) String actingSystemID,
+			@RequestParam(value = "actingPassword", required = false) String actingPassword) {
 		// Public sign-up may create END_USER accounts only. Creating an ADMIN or
 		// OPERATOR requires an existing administrator to authorize it.
 		String role = input.getRole();
 		if (UserRole.ADMIN.name().equals(role) || UserRole.OPERATOR.name().equals(role)) {
-			guard.requireAdminByEmail(actingEmail, actingSystemID);
+			guard.requireAdminByEmail(actingEmail, actingSystemID, actingPassword);
 		}
 		UserBoundary boundary = new UserBoundary();
 		boundary.setUserId(new UserId(input.getEmail(), null));

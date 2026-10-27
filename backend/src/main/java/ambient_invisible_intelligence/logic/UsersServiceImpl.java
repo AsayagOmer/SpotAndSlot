@@ -7,6 +7,8 @@ import java.util.regex.Pattern;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,12 +30,22 @@ public class UsersServiceImpl implements UsersService {
 
 	private final UserRepository userRepository;
 	private final String systemID;
+	private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 	private Log logger = LogFactory.getLog(UsersServiceImpl.class);
 
 	public UsersServiceImpl(UserRepository userRepository,
 			@Value("${spring.application.name}") String systemID) {
 		this.userRepository = userRepository;
 		this.systemID = systemID;
+	}
+
+	private boolean matchesPassword(String rawPassword, String storedPassword) {
+		if (rawPassword == null || storedPassword == null)
+			return false;
+		if (storedPassword.startsWith("$2a$") || storedPassword.startsWith("$2b$") || storedPassword.startsWith("$2y$")) {
+			return passwordEncoder.matches(rawPassword, storedPassword);
+		}
+		return storedPassword.equals(rawPassword);
 	}
 
 	@Override
@@ -61,7 +73,7 @@ public class UsersServiceImpl implements UsersService {
 		e.setId(key);
 		e.setEmail(email);
 		e.setSystemID(systemID);
-		e.setPassword(newPassword);
+		e.setPassword(passwordEncoder.encode(newPassword));
 		e.setRole(user.getRole());
 		e.setUsername(user.getUsername());
 		e.setAvatar(user.getAvatar());
@@ -74,7 +86,7 @@ public class UsersServiceImpl implements UsersService {
 	@Transactional(readOnly = true)
 	public Optional<UserBoundary> loginUser(String systemID, String userEmail, String password) {
 		return userRepository.findById(UserEntity.key(userEmail, systemID))
-				.filter(u -> u.getPassword().equals(password))
+				.filter(u -> matchesPassword(password, u.getPassword()))
 				.map(this::toBoundary);
 	}
 
@@ -84,12 +96,12 @@ public class UsersServiceImpl implements UsersService {
 	                       UserBoundary update, String updatedPassword) {
 		UserEntity e = userRepository.findById(UserEntity.key(userEmail, systemID))
 				.orElseThrow(() -> new NotFoundException("user not found: " + userEmail));
-		if (!e.getPassword().equals(existingPassword))
+		if (!matchesPassword(existingPassword, e.getPassword()))
 			throw new InvalidInputException("invalid password");
 		// email and systemID are immutable
 		if (updatedPassword != null) {
 			validatePassword(updatedPassword);
-			e.setPassword(updatedPassword);
+			e.setPassword(passwordEncoder.encode(updatedPassword));
 		}
 		if (update.getRole() != null) {
 			validateRole(update.getRole());
