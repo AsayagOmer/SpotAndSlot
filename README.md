@@ -1,6 +1,7 @@
 # Spot&Slot — Smart Parking Management System
 > *"The Moovit of Parking"*
 
+[![CI Pipeline](https://github.com/AsayagOmer/SpotAndSlot/actions/workflows/ci.yml/badge.svg)](https://github.com/AsayagOmer/SpotAndSlot/actions/workflows/ci.yml)
 [![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1-6DB33F?style=for-the-badge&logo=spring-boot&logoColor=white)](https://spring.io/projects/spring-boot)
 [![Java](https://img.shields.io/badge/Java-JDK_25-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)](https://www.oracle.com/java/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
@@ -39,13 +40,13 @@ flowchart TD
 
     subgraph Backend["Backend Subsystem (Spring Boot 4.1 · JDK 25)"]
         Controllers["REST Controllers<br/>(API v1.4)"]
-        Logic["Business Logic & AccessGuard<br/>(RBAC: ADMIN / OPERATOR / END_USER)"]
+        Logic["Business Logic & AccessGuard<br/>(RBAC + BCrypt Auth)"]
         Persistence["Spring Data JPA Persistence<br/>(Entities & Repositories)"]
         HealthScheduler["Slot Health Scheduler<br/>(Heartbeat Scanner)"]
     end
 
     subgraph MLService["Predictive Microservice (Python · Flask)"]
-        Model["XGBoost Quantile Model Bundle<br/>(P10 / P50 / P90 Uncertainty Bands)"]
+        Model["XGBoost Quantile Model Bundle<br/>(P10 / P50 / P90 + Exponential Time-Decay)"]
     end
 
     subgraph Storage["Database Infrastructure"]
@@ -65,9 +66,9 @@ The system is organized as a unified monorepo containing three core micro-compon
 
 | Subsystem | Directory | Tech Stack | Description |
 |---|---|---|---|
-| **Backend API** | [`/backend`](./backend) | Spring Boot 4.1, JDK 25, Spring Data JPA, PostgreSQL | Central RESTful API (v1.4) managing entities, RBAC access guards, geo-spatial lookups, commands, and health schedulers. Verified with 111 passing automated tests (JUnit, Testcontainers, Cucumber BDD). |
+| **Backend API** | [`/backend`](./backend) | Spring Boot 4.1, JDK 25, Spring Data JPA, Spring Security Crypto, PostgreSQL | Central RESTful API (v1.4) managing entities, BCrypt password hashing, RBAC access guards, geo-spatial lookups, commands, and health schedulers. Verified with 113+ passing automated tests (JUnit, Testcontainers, Cucumber BDD). |
 | **Client Apps** | [`/client`](./client) | React 18, Vite 5, TypeScript, Tailwind CSS, shadcn/ui, TanStack Query, Capacitor | Cross-platform web and mobile clients: Driver Mobile App (Android APK via Capacitor & mobile web with Hebrew RTL support) + Operator/Admin Desktop Console. |
-| **Predictive Service** | [`/predictive-service`](./predictive-service) | Python 3.10+, Flask, XGBoost, Scikit-learn, Pandas | ML microservice providing `/predict` and `/forecast` endpoints using an XGBoost quantile regression bundle (P10/P50/P90 confidence band) trained on calendar, seasonal, and holiday features ($R^2 = 0.948$). |
+| **Predictive Service** | [`/predictive-service`](./predictive-service) | Python 3.10+, Flask, XGBoost, Scikit-learn, Pandas, Pytest | ML microservice providing `/predict`, `/forecast`, and `/health` endpoints using an XGBoost quantile regression bundle (P10/P50/P90 confidence band) with exponential time-horizon decay blending ($R^2 = 0.948$). |
 | **Documentation** | [`/docs`](./docs) | PDF | Complete architectural report, SRS v1.4, UX/UI research, model evaluation, and Kanban progression report. |
 
 ---
@@ -82,7 +83,7 @@ The architecture of **Spot&Slot** is grounded in established software engineerin
 2. **Boundary-Control-Entity (BCE) & Layered Separation**:
    Strict separation between external contracts and database schemas:
    - **Boundaries (DTOs)**: `UserBoundary`, `ObjectBoundary`, and `CommandBoundary` define the versioned REST contract (API v1.4).
-   - **AccessGuard & RBAC**: Centralized security layer verifying caller credentials and role permissions (`ADMIN`, `OPERATOR`, `END_USER`) before any request hits domain logic.
+   - **AccessGuard & RBAC**: Centralized security layer verifying caller credentials (via BCrypt password hashing) and role permissions (`ADMIN`, `OPERATOR`, `END_USER`) before any request hits domain logic.
    - **Control (Business Logic)**: Modular services (`ObjectsService`, `CommandsService`, `UsersService`) encapsulate business invariants, section availability grouping, and cascading lifecycle operations.
    - **Entities & Persistence**: Spring Data JPA repositories persist state to PostgreSQL via clean relational abstractions.
 
@@ -138,7 +139,7 @@ docker compose up --build
 
 - **Backend API**: `http://localhost:8084/ambient-invisible-intelligence`
 - **Swagger / OpenAPI Documentation**: `http://localhost:8084/swagger-ui.html`
-- **ML Microservice**: `http://localhost:5000`
+- **ML Microservice**: `http://localhost:5000` (Readiness probe: `GET /health`)
 
 ### Option 2: Running Components Individually
 
@@ -182,10 +183,20 @@ npm run dev:admin
 
 ## 🧪 Testing & Quality Assurance
 
-- **Integration & BDD Suite**: 111 automated tests covering end-to-end REST interactions, role permission matrices, and edge cases using Testcontainers and Cucumber Gherkin feature files.
+- **Backend Integration & BDD Suite**: 113+ automated tests covering end-to-end REST interactions, BCrypt security gates, role permission matrices, and edge cases using Testcontainers and Cucumber Gherkin feature files.
   ```bash
   cd backend
   ./gradlew test
+  ```
+- **Predictive ML Unit Suite**: Automated `pytest` suite verifying `/health`, P10–P90 quantile bounds, exponential time-horizon decay weighting, and strict `400 Bad Request` payload validation.
+  ```bash
+  cd predictive-service
+  pytest -v
+  ```
+- **Client Unit Suite**: Vitest unit tests verifying API clients, authentication state, and parking data hooks.
+  ```bash
+  cd client
+  npm test -- --run
   ```
 - **Load & Performance Testing**: Apache JMeter 5.6.3 test plan (`backend/perf/smart-parking-perf.jmx`) under 10 concurrent users / 1,000 requests achieved 0.00% error rate and single-digit to ~18 ms average latency on paged reads and geographic searches.
 
@@ -209,6 +220,24 @@ Beyond serving as **Team Lead & Scrum Master**, Omer played an active hands-on t
 - **Machine Learning & Algorithmic Research**: Led the research, prototyping, and production deployment of the parking availability predictor. Evaluated multiple candidate algorithms (Linear Regression, Decision Trees, Random Forests, Gradient Boosting vs. XGBoost), trained and tuned the final **XGBoost quantile bundle (P10/P50/P90)** ($R^2 = 0.948$), and designed the capacity-independent scaling mechanism that enables a single model to serve arbitrary parking lots.
 - **Data Engineering**: Collaborated closely with **Tom Gurevich** on synthetic data modeling and feature engineering pipelines (`mockdatagen.py`), synthesizing 43,800+ hourly data points across North Tel Aviv lots while integrating Israeli public holidays, Shabbat transitions, academic terms, and major regional events.
 - **UI/UX Research, Product Strategy & Alpha Testing**: Actively partnered with **Avishay Haimov** and **Stephanie Kovaks** in conducting extensive user research and field interviews across North Tel Aviv, formulating user personas (Noa, Rami, Tomer). Together with **Avishay Haimov**, conducted hands-on alpha testing with local drivers and residents, translating user friction into critical design improvements (Hebrew RTL adaptation, transitioning alarming reds to calm visual palettes, and adding uncertainty-band forecast visualizations).
+
+---
+
+## 🛠️ Post-Course Production & AI Engineering Upgrades (by Omer Asayag)
+
+Following the completion of the academic course (where the project scored **100/100** and ranked **#1**), **Omer Asayag** independently architected and implemented a series of production-grade engineering upgrades across **Security**, **Database Performance**, **AI/ML Inference**, and **CI/CD**:
+
+1. **Security Hardening (`P0`)**:
+   - **BCrypt Password Hashing at Rest**: Integrated `spring-security-crypto` (`BCryptPasswordEncoder`) in `UsersServiceImpl` and `AccessGuard` so user passwords are salted and hashed (`$2a$`) at rest rather than stored in plaintext.
+   - **Authenticated Admin Provisioning**: Hardened `POST /users` and `AccessGuard.requireAdminByEmail` to support cryptographic verification of the acting administrator's password (`actingPassword`) when creating elevated `ADMIN` or `OPERATOR` accounts.
+2. **Backend Resilience & Query Optimization (`P0` / `P1`)**:
+   - **Active-Filtered Database Queries & Single-Pass Aggregation**: Added `findAllByTypeAndActiveTrue` and `findAllByTypeAndStatusAndActiveTrue` in `ObjectRepository`, eliminating redundant full-table JVM memory scans in `predictAvailability`, `availabilityInLot`, `bestSectionInLot`, and `availabilityInSection`, and fixing inactive-slot leakage in ML capacity calculations.
+   - **Externalized `ML_URL` & Bounded HTTP Timeouts**: Replaced hardcoded `localhost:5000` calls and unbounded per-request `RestTemplate` instances in `CommandsServiceImpl` with a singleton client configured with `2000ms` connect and `3000ms` read timeouts and environment-driven `ML_URL` discovery.
+3. **AI / ML Inference Engineering (`P1` / `P2`)**:
+   - **Exponential Time-Horizon Decay Blending**: Upgraded `/predict` in `predictive-service/app.py` from a static `70/30` smoothing weight to an exponential time-decay function $w(\Delta t) = 0.5 \cdot e^{-\max(0, \Delta t_{\text{hours}}) / 2.0}$. Near-term predictions ($\Delta t \to 0$) weight live sensor occupancy up to `50%`, while long-horizon predictions ($\Delta t > 6\text{h}$) smoothly decay to rely on the historical XGBoost P50 prior.
+   - **Point-Prediction Uncertainty Bands & Input Validation**: Extended `/predict` to return P10–P90 confidence intervals (`predictedFreeLower`, `predictedFreeUpper`), added strict `400 Bad Request` schema validation, and exposed a `GET /health` readiness probe wired to Docker Compose healthchecks.
+4. **Continuous Integration & DevOps (`P3`)**:
+   - Consolidated the three course repositories into a unified monorepo with multi-service `docker-compose.yml` orchestration, Foojay JDK 25 Gradle toolchain auto-provisioning, SLF4J structured logging, and an automated **GitHub Actions CI pipeline** (`.github/workflows/ci.yml`) running Backend JUnit/Cucumber BDD tests, Client Vitest tests, and Python `pytest` suites on every push.
 
 ---
 
