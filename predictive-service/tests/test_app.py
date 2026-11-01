@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
 import pytest
-from app import app
+from app import app, _get_internal_api_key
+
+AUTH_HEADERS = {"X-Internal-API-Key": _get_internal_api_key()}
 
 
 @pytest.fixture
@@ -19,6 +21,23 @@ def test_health_endpoint(client):
     assert "hour_of_day" in body["features"]
 
 
+def test_predict_requires_valid_s2s_api_key(client):
+    future_ts = (datetime.now() + timedelta(hours=2)).isoformat()
+    payload = {"targetTimestamp": future_ts, "currentFreeSlots": 20, "totalSlots": 100}
+
+    # Missing key -> 401
+    r_missing = client.post("/predict", json=payload)
+    assert r_missing.status_code == 401
+
+    # Invalid key -> 401
+    r_wrong = client.post(
+        "/predict",
+        json=payload,
+        headers={"X-Internal-API-Key": "wrong-secret-key"},
+    )
+    assert r_wrong.status_code == 401
+
+
 def test_predict_success_and_bounds(client):
     future_ts = (datetime.now() + timedelta(hours=3)).isoformat()
     resp = client.post(
@@ -28,6 +47,7 @@ def test_predict_success_and_bounds(client):
             "currentFreeSlots": 20,
             "totalSlots": 100,
         },
+        headers=AUTH_HEADERS,
     )
     assert resp.status_code == 200
     body = resp.get_json()
@@ -44,10 +64,12 @@ def test_predict_time_horizon_decay_weights_near_term_higher(client):
     near_resp = client.post(
         "/predict",
         json={"targetTimestamp": near_ts, "currentFreeSlots": 10, "totalSlots": 100},
+        headers=AUTH_HEADERS,
     ).get_json()
     far_resp = client.post(
         "/predict",
         json={"targetTimestamp": far_ts, "currentFreeSlots": 10, "totalSlots": 100},
+        headers=AUTH_HEADERS,
     ).get_json()
 
     assert near_resp["liveBlendWeight"] > far_resp["liveBlendWeight"]
@@ -56,13 +78,14 @@ def test_predict_time_horizon_decay_weights_near_term_higher(client):
 
 def test_predict_rejects_invalid_inputs_with_400(client):
     # Missing targetTimestamp
-    r1 = client.post("/predict", json={"totalSlots": 50})
+    r1 = client.post("/predict", json={"totalSlots": 50}, headers=AUTH_HEADERS)
     assert r1.status_code == 400
 
     # Negative totalSlots
     r2 = client.post(
         "/predict",
         json={"targetTimestamp": "2026-07-01T12:00:00Z", "totalSlots": -5},
+        headers=AUTH_HEADERS,
     )
     assert r2.status_code == 400
 
@@ -70,6 +93,7 @@ def test_predict_rejects_invalid_inputs_with_400(client):
     r3 = client.post(
         "/predict",
         json={"targetTimestamp": "not-a-timestamp", "totalSlots": 50},
+        headers=AUTH_HEADERS,
     )
     assert r3.status_code == 400
 

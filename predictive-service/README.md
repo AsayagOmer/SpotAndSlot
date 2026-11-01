@@ -23,13 +23,16 @@ For single-point predictions (`POST /predict`), the service blends the historica
 $$w(\Delta t) = 0.5 \cdot e^{-\max(0, \Delta t_{\text{hours}}) / 2.0}$$
 $$\hat{y} = (1 - w(\Delta t)) \cdot \text{predictedFree}_{P50} + w(\Delta t) \cdot \text{currentFreeSlots}$$
 
+### Service-to-Service Authentication
+The `/predict` endpoint is protected by a shared internal API key (`ML_API_KEY` environment variable) passed via the `X-Internal-API-Key` header and verified using constant-time digest comparison (`hmac.compare_digest`). Requests with a missing or invalid key are rejected with `401 Unauthorized`.
+
 ## Endpoints
 
-| Endpoint | Method | Body / Params | Returns |
-|---|---|---|---|
-| `/health` | `GET` | — | `{"status": "healthy", "model_loaded": true, "features": [...]}` |
-| `/predict` | `POST` | `{"targetTimestamp": ISO-8601, "currentFreeSlots": N, "totalSlots": N}` | P50 prediction blended via exponential time-decay + P10/P90 bounds (`predictedFreeLower`, `predictedFreeUpper`) |
-| `/forecast` | `POST` | `{"date": "YYYY-MM-DD", "totalSlots": N}` | 24 hourly points with a P10–P90 confidence band + holiday info |
+| Endpoint | Method | Auth | Body / Params | Returns |
+|---|---|---|---|---|
+| `/health` | `GET` | Public | — | `{"status": "healthy", "model_loaded": true, "features": [...]}` |
+| `/predict` | `POST` | `X-Internal-API-Key` | `{"targetTimestamp": ISO-8601, "currentFreeSlots": N, "totalSlots": N}` | P50 prediction blended via exponential time-decay + P10/P90 bounds (`predictedFreeLower`, `predictedFreeUpper`) |
+| `/forecast` | `POST` | Public | `{"date": "YYYY-MM-DD", "totalSlots": N}` | 24 hourly points with a P10–P90 confidence band + holiday info |
 
 Invalid payloads (missing/malformed timestamps or negative slot counts) are rejected with `400 Bad Request`. Sample requests live in `curl/`.
 

@@ -1,10 +1,11 @@
 from flask import Flask, request, jsonify
+import hmac
 import joblib
 import math
 import os
 import pandas as pd
 import holidays
-from datetime import datetime, date as date_cls, timezone
+from datetime import datetime, date as date_cls
 from pathlib import Path
 
 app = Flask(__name__)
@@ -21,6 +22,21 @@ FEATURES = bundle["features"]
 
 IL_HOLIDAYS = holidays.Israel(years=range(2024, 2031), language="en_US")
 ALLOWED_ORIGIN = os.environ.get("CORS_ALLOWED_ORIGIN", "*")
+INTERNAL_API_KEY_HEADER = "X-Internal-API-Key"
+
+
+def _get_internal_api_key() -> str:
+    return os.environ.get("ML_API_KEY", "spotandslot-s2s-internal-key")
+
+
+def _verify_internal_api_key() -> bool:
+    expected = _get_internal_api_key()
+    if not expected:
+        return True
+    provided = request.headers.get(INTERNAL_API_KEY_HEADER, "")
+    if not provided:
+        return False
+    return hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8"))
 
 
 def _features_for(dt: datetime, total_slots: int) -> dict:
@@ -44,7 +60,7 @@ def _rate(model_key: str, feats: dict) -> float:
 
 def _cors(resp):
     resp.headers["Access-Control-Allow-Origin"] = ALLOWED_ORIGIN
-    resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    resp.headers["Access-Control-Allow-Headers"] = f"Content-Type, {INTERNAL_API_KEY_HEADER}"
     resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     return resp
 
@@ -69,6 +85,8 @@ def health():
 def predict():
     if request.method == 'OPTIONS':
         return _cors(app.make_default_options_response())
+    if not _verify_internal_api_key():
+        return _cors(jsonify({"error": "Unauthorized: missing or invalid X-Internal-API-Key"})), 401
     try:
         data = request.get_json(silent=True)
         if not isinstance(data, dict):

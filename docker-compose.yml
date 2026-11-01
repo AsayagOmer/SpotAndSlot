@@ -6,11 +6,13 @@ services:
     environment:
       POSTGRES_DB: mydatabase
       POSTGRES_USER: myuser
-      POSTGRES_PASSWORD: secret
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - spotandslot-internal
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U myuser -d mydatabase"]
       interval: 5s
@@ -24,9 +26,12 @@ services:
     container_name: spotandslot-predictive-service
     restart: unless-stopped
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
     environment:
       - PORT=5000
+      - ML_API_KEY=${ML_API_KEY:-spotandslot-s2s-internal-key}
+    networks:
+      - spotandslot-internal
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
       interval: 10s
@@ -45,13 +50,24 @@ services:
       - SPRING_PROFILES_ACTIVE=prod
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/mydatabase
       - SPRING_DATASOURCE_USERNAME=myuser
-      - SPRING_DATASOURCE_PASSWORD=secret
+      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-secret}
       - ML_URL=http://predictive-service:5000
+      - ML_API_KEY=${ML_API_KEY:-spotandslot-s2s-internal-key}
+    networks:
+      - spotandslot-internal
+      - spotandslot-public
     depends_on:
       postgres:
         condition: service_healthy
       predictive-service:
         condition: service_healthy
+
+networks:
+  spotandslot-internal:
+    driver: bridge
+    internal: true
+  spotandslot-public:
+    driver: bridge
 
 volumes:
   postgres_data:

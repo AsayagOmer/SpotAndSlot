@@ -50,14 +50,14 @@ flowchart TD
     end
 
     subgraph Storage["Database Infrastructure"]
-        Postgres[("PostgreSQL 16<br/>(Docker Compose / Persistent Volume)")]
+        Postgres[("PostgreSQL 16<br/>(Internal Bridge Network)")]
     end
 
     Mobile -->|HTTP REST /ambient-invisible-intelligence| Controllers
     Console -->|HTTP REST /ambient-invisible-intelligence| Controllers
     Controllers --> Logic
     Logic --> Persistence
-    Logic -->|HTTP POST /predict & /forecast| MLService
+    Logic -->|HTTP POST /predict + X-Internal-API-Key| MLService
     Persistence -->|Spring Data JPA / JDBC| Postgres
     HealthScheduler -->|Every 30s: mark stale slots FAULTY| Persistence
 ```
@@ -66,9 +66,9 @@ The system is organized as a unified monorepo containing three core micro-compon
 
 | Subsystem | Directory | Tech Stack | Description |
 |---|---|---|---|
-| **Backend API** | [`/backend`](./backend) | Spring Boot 4.1, JDK 25, Spring Data JPA, Spring Security Crypto, PostgreSQL | Central RESTful API (v1.4) managing entities, BCrypt password hashing, RBAC access guards, geo-spatial lookups, commands, and health schedulers. Verified with 113+ passing automated tests (JUnit, Testcontainers, Cucumber BDD). |
+| **Backend API** | [`/backend`](./backend) | Spring Boot 4.1, JDK 25, Spring Data JPA, Spring Security Crypto, PostgreSQL | Central RESTful API (v1.4) managing entities, BCrypt password hashing, RBAC access guards, S2S authenticated ML calls, geo-spatial lookups, commands, and health schedulers. Verified with 113+ passing automated tests (JUnit, Testcontainers, Cucumber BDD). |
 | **Client Apps** | [`/client`](./client) | React 18, Vite 5, TypeScript, Tailwind CSS, shadcn/ui, TanStack Query, Capacitor | Cross-platform web and mobile clients: Driver Mobile App (Android APK via Capacitor & mobile web with Hebrew RTL support) + Operator/Admin Desktop Console. |
-| **Predictive Service** | [`/predictive-service`](./predictive-service) | Python 3.10+, Flask, XGBoost, Scikit-learn, Pandas, Pytest | ML microservice providing `/predict`, `/forecast`, and `/health` endpoints using an XGBoost quantile regression bundle (P10/P50/P90 confidence band) with exponential time-horizon decay blending ($R^2 = 0.948$). |
+| **Predictive Service** | [`/predictive-service`](./predictive-service) | Python 3.10+, Flask, XGBoost, Scikit-learn, Pandas, Pytest | ML microservice providing `/predict` (S2S authenticated via `X-Internal-API-Key`), `/forecast`, and `/health` endpoints using an XGBoost quantile regression bundle (P10/P50/P90 confidence band) with exponential time-horizon decay blending ($R^2 = 0.948$). |
 | **Documentation** | [`/docs`](./docs) | PDF | Complete architectural report, SRS v1.4, UX/UI research, model evaluation, and Kanban progression report. |
 
 ---
@@ -90,8 +90,8 @@ The architecture of **Spot&Slot** is grounded in established software engineerin
 3. **Generic Metamodel & Command Pattern**:
    Instead of static tables for every domain object, physical entities (`PARKING_LOT`, `PARKING_SECTION`, `PARKING_SLOT`, `VEHICLE`) share an extensible metamodel with typed JSON attribute maps and hierarchical parent/child links. Domain operations are modeled as first-class executable commands dispatched, validated, and logged through `CommandBoundary`.
 
-4. **Decoupled Polyglot Microservices**:
-   Core transactional business logic (Java 25 / Spring Boot 4.1) is decoupled from statistical machine learning modeling (Python / Flask + XGBoost) and front-end clients (React 18 / Vite / Capacitor), communicating via versioned HTTP REST contracts for independent maintainability and scalability.
+4. **Decoupled Polyglot Microservices & S2S Security**:
+   Core transactional business logic (Java 25 / Spring Boot 4.1) is decoupled from statistical machine learning modeling (Python / Flask + XGBoost) and front-end clients (React 18 / Vite / Capacitor). Service-to-service communication over the isolated Docker internal bridge network is authenticated via a shared `X-Internal-API-Key` verified in constant time (`hmac.compare_digest`).
 
 5. **Fail-Soft Graceful Degradation (Resilience)**:
    In the event the machine-learning microservice is unreachable, the API gracefully falls back to real-time heuristic slot availability calculations with an informational note, ensuring uninterrupted driver operations (NFR-2).
@@ -139,7 +139,7 @@ docker compose up --build
 
 - **Backend API**: `http://localhost:8084/ambient-invisible-intelligence`
 - **Swagger / OpenAPI Documentation**: `http://localhost:8084/swagger-ui.html`
-- **ML Microservice**: `http://localhost:5000` (Readiness probe: `GET /health`)
+- **ML Microservice**: `http://127.0.0.1:5000` (Readiness probe: `GET /health`)
 
 ### Option 2: Running Components Individually
 
@@ -188,7 +188,7 @@ npm run dev:admin
   cd backend
   ./gradlew test
   ```
-- **Predictive ML Unit Suite**: Automated `pytest` suite verifying `/health`, P10–P90 quantile bounds, exponential time-horizon decay weighting, and strict `400 Bad Request` payload validation.
+- **Predictive ML Unit Suite**: Automated `pytest` suite verifying `/health`, `X-Internal-API-Key` service-to-service authentication (`401 Unauthorized` on missing/invalid keys), P10–P90 quantile bounds, exponential time-horizon decay weighting, and strict `400 Bad Request` payload validation.
   ```bash
   cd predictive-service
   pytest -v
@@ -227,9 +227,10 @@ Beyond serving as **Team Lead & Scrum Master**, Omer played an active hands-on t
 
 Following the completion of the academic course (where the project scored **100/100** and ranked **#1**), **Omer Asayag** independently architected and implemented a series of production-grade engineering upgrades across **Security**, **Database Performance**, **AI/ML Inference**, and **CI/CD**:
 
-1. **Security Hardening (`P0`)**:
+1. **Security Hardening & Service-to-Service Auth (`P0`)**:
    - **BCrypt Password Hashing at Rest**: Integrated `spring-security-crypto` (`BCryptPasswordEncoder`) in `UsersServiceImpl` and `AccessGuard` so user passwords are salted and hashed (`$2a$`) at rest rather than stored in plaintext.
    - **Authenticated Admin Provisioning**: Hardened `POST /users` and `AccessGuard.requireAdminByEmail` to support cryptographic verification of the acting administrator's password (`actingPassword`) when creating elevated `ADMIN` or `OPERATOR` accounts.
+   - **Service-to-Service Authentication & Network Isolation**: Secured internal `backend` → `predictive-service` `/predict` calls with an `X-Internal-API-Key` header verified via constant-time `hmac.compare_digest`, isolated `postgres` and `predictive-service` on an internal Docker bridge network (`spotandslot-internal`), and restricted host debug ports to `127.0.0.1`.
 2. **Backend Resilience & Query Optimization (`P0` / `P1`)**:
    - **Active-Filtered Database Queries & Single-Pass Aggregation**: Added `findAllByTypeAndActiveTrue` and `findAllByTypeAndStatusAndActiveTrue` in `ObjectRepository`, eliminating redundant full-table JVM memory scans in `predictAvailability`, `availabilityInLot`, `bestSectionInLot`, and `availabilityInSection`, and fixing inactive-slot leakage in ML capacity calculations.
    - **Externalized `ML_URL` & Bounded HTTP Timeouts**: Replaced hardcoded `localhost:5000` calls and unbounded per-request `RestTemplate` instances in `CommandsServiceImpl` with a singleton client configured with `2000ms` connect and `3000ms` read timeouts and environment-driven `ML_URL` discovery.
